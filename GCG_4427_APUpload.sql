@@ -1,0 +1,3 @@
+CREATE TABLE GCG_4427_APUpload(
+ Batch_ID VARCHAR(5) DEFAULT '0',
+ UNIQUE (Batch_ID));
