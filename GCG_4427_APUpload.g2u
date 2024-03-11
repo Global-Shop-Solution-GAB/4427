@@ -1,0 +1,1085 @@
+Program.Sub.ScreenSU.Start
+Gui.F_AP_UPLOAD..create
+Gui.F_AP_UPLOAD..caption("Invoice Upload from Concur")
+Gui.F_AP_UPLOAD..size(4110,3495)
+Gui.F_AP_UPLOAD..position(0,0)
+Gui.F_AP_UPLOAD..event(UnLoad,f_ap_upload_unload)
+Gui.F_AP_UPLOAD..forecolor(0)
+Gui.F_AP_UPLOAD..BackColor(-2147483633)
+Gui.F_AP_UPLOAD..maxbutton(False)
+Gui.F_AP_UPLOAD..minbutton(False)
+Gui.F_AP_UPLOAD..mousepointer(0)
+Gui.F_AP_UPLOAD..MinX(0)
+Gui.F_AP_UPLOAD..MinY(0)
+Gui.F_AP_UPLOAD.txtFile.create(textbox,"",True,3000,300,0,195,405,True,0,Arial,8,-2147483643,1)
+Gui.F_AP_UPLOAD.txtFile.Locked(True)
+Gui.F_AP_UPLOAD.dtpBatch.create(datepicker)
+Gui.F_AP_UPLOAD.dtpBatch.size(1935,300)
+Gui.F_AP_UPLOAD.dtpBatch.position(195,1080)
+Gui.F_AP_UPLOAD.lbl1.create(label,"File",True,1935,240,1,200,200,True,0,Arial,8,-2147483633,0)
+Gui.F_AP_UPLOAD.lbl2.create(label,"Batch Date",True,1935,255,1,195,855,True,0,Arial,8,-2147483633,0)
+Gui.F_AP_UPLOAD.cmdBrowser.create(button)
+Gui.F_AP_UPLOAD.cmdBrowser.caption("^")
+Gui.F_AP_UPLOAD.cmdBrowser.size(375,375)
+Gui.F_AP_UPLOAD.cmdBrowser.position(3215,360)
+Gui.F_AP_UPLOAD.cmdBrowser.event(Click,cmdbrowser_click)
+Gui.F_AP_UPLOAD.cmdOK.create(button)
+Gui.F_AP_UPLOAD.cmdOK.caption("OK")
+Gui.F_AP_UPLOAD.cmdOK.size(855,375)
+Gui.F_AP_UPLOAD.cmdOK.position(225,2415)
+Gui.F_AP_UPLOAD.cmdOK.event(Click,cmdok_click)
+Gui.F_AP_UPLOAD.cmdOK.Enabled(False)
+Gui.F_AP_UPLOAD.lbl3.Create(Label,"Vendor",True,1935,255,1,210,1620,True,0,"Arial",8,-2147483633,0)
+Gui.F_AP_UPLOAD.txtvendor.Create(TextBox,"",True,1905,300,0,225,1845,True,0,"Arial",8,-2147483643,1)
+Gui.F_AP_UPLOAD.txtvendor.MaxLength(15)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Variable.UDT.uUpload.Define("Vendor",String)
+Variable.UDT.uUpload.Define("Invoice",String)
+Variable.UDT.uUpload.Define("GL",String)
+Variable.UDT.uUpload.Define("InvoiceDate",String)
+Variable.UDT.uUpload.Define("InvoiceAmt",String)
+Variable.UDT.uUpload.Define("TrnsCode",String)
+Variable.UDT.uUpload.Define("Line",String)
+Variable.UDT.uUpload.Define("BatchDate",String)
+Variable.UDT.uUpload.Define("InvoiceDDate",String)
+Variable.UDT.uUpload.Define("WO",String)
+Variable.UDT.uUpload.Define("Sfx",String)
+Variable.UDT.uUpload.Define("ExRate",String)
+Variable.UDT.uUpload.Define("Operation",String)
+Variable.UDT.uUpload.Define("BatchNum",String)
+Variable.uGlobal.uUpload.Declare("uUpload")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+v.Global.bStatchg.Declare 
+v.Global.sBCode.Declare 
+
+F.ODBC.Connection!Conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+
+'gui.F_AP_UPLOAD.txtvendor.Text("BB&T10")
+
+f.Intrinsic.Control.CallSub(getbankcode)
+
+f.Intrinsic.Control.If(v.Args.Bcode.trim,<>,"")
+	gui.F_AP_UPLOAD.txtvendor.Text(v.Args.Bcode)
+	v.Global.sBCode.Set(v.Args.Bcode.trim)
+f.Intrinsic.Control.EndIf 
+
+'temp
+'gui.F_AP_UPLOAD.txtvendor.Text("001970")
+Gui.F_AP_UPLOAD..Show
+
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Main.End
+
+Program.Sub.cmdok_click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdok_click_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sTemp.Declare(String)'
+V.local.iBatch.Declare(long)
+V.Global.sBatch.Declare(String)
+V.Global.sPayAcct.Declare(String)
+v.Global.sInvoice.Declare(String)
+V.Local.sSQL.Declare(String)
+V.Local.sBatch.Declare(String)
+v.Local.sFilname.Declare
+v.Local.sRet.Declare
+
+
+
+
+v.Local.sRet.Set(v.Screen.F_AP_UPLOAD!txtvendor.Text)
+
+f.Intrinsic.Control.If(v.Local.sRet.Trim,<>,"")
+	f.Intrinsic.Control.If(v.Global.sBCode,<>,v.Local.sRet.trim)
+	'vendor changed
+		f.Intrinsic.String.Build("{0}Bcode.det",v.Caller.GasDir,v.Local.sFilname)
+		F.Intrinsic.File.String2File(V.Local.sFilname,v.Local.sRet.trim)
+	F.Intrinsic.Control.EndIf
+f.Intrinsic.Control.Else
+	F.Intrinsic.UI.Msgbox("Vendor code cannot be blank")
+	f.Intrinsic.Control.ExitSub 
+F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.Control.CallSub(Vendor_check,"Vendor",v.Screen.F_AP_UPLOAD!txtvendor.text)
+F.Intrinsic.Control.If(V.Args.Return,=,"False")
+	F.Intrinsic.String.Concat("Vendor ",v.Screen.F_AP_UPLOAD!txtvendor.text," does not exist",V.Local.sTemp)
+	F.Intrinsic.UI.Msgbox(V.Local.sTemp)
+
+'	F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+	f.Intrinsic.Control.ExitSub 
+F.Intrinsic.Control.EndIf
+
+
+'old method
+''READ GL BACTCH
+''Function.Global.General.ReadOption(140002, 2, 1, "0001", V.Global.iBatch)
+''READ AP BACTCH
+'Function.Global.General.ReadOption(400266, 3, 1, "0002", V.local.iBatch)
+'
+''Read PAY ACCT
+'Function.Global.General.ReadOption(402012, 1, "", "0000", v.global.sPayAcct)
+'
+'F.Intrinsic.String.Format(V.local.iBatch.long,"0000",V.Global.sBatch)
+'F.Intrinsic.String.Concat("A",V.Global.sBatch,V.Global.sBatch)
+
+
+'F.Intrinsic.String.Build("select VOUCH_NUM from AP_VOUCH where Vouch_Key = '{0}'","C",V.Local.sSQL)
+'F.ODBC.Connection!conx.OpenLocalRecordsetRO("rstBatch",V.Local.sSQL)
+'
+'F.Intrinsic.Control.if(V.ODBC.conx!rstBatch.EOF,=,False)
+'	V.Global.sBatch.Set(V.ODBC.conx!rstBatch.FieldValtrim!VOUCH_NUM)
+'f.Intrinsic.Control.Else
+'	f.Intrinsic.UI.Msgbox("Import failed, AP BatchNo not found")
+'	f.Intrinsic.Control.ExitSub 
+'F.Intrinsic.Control.EndIf
+'F.ODBC.conx!rstBatch.Close
+
+'8279
+
+
+'Create custom batch no
+
+Function.Intrinsic.UI.InvokeWaitDialog("Upload in progress please wait ...")
+gui.F_AP_UPLOAD..Visible(false)
+
+f.ODBC.Connection!conx.GetID("GCG_4427_APUpload", "Batch_ID", True,V.local.iBatch)
+F.Intrinsic.String.Format(V.local.iBatch,"0000",V.Global.sBatch)
+F.Intrinsic.String.Concat("U",V.Global.sBatch,V.Global.sBatch)
+
+
+
+V.Local.sSQL.set("select ACCT_FULL from v_ACCTS_PAY_ACCT")
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rstBatch",V.Local.sSQL)
+F.Intrinsic.Control.if(V.ODBC.conx!rstBatch.EOF,=,False)
+	V.Global.sPayAcct.Set(V.ODBC.conx!rstBatch.FieldValtrim!ACCT_FULL)
+f.Intrinsic.Control.Else
+	f.Intrinsic.UI.Msgbox("Import failed, Payable account not found")
+	f.Intrinsic.Control.ExitSub 
+F.Intrinsic.Control.EndIf
+F.ODBC.conx!rstBatch.Close
+
+
+Function.Intrinsic.UI.ChangeWaitStatus("AP File build") 
+f.Intrinsic.Control.CallSub(ap_format)
+
+F.Intrinsic.Control.If(V.Args.MissAct,<>,"")
+
+V.Local.sDate.Declare(string)
+V.Local.sTime.Declare(string)
+V.Local.sFileName.Declare(string)
+V.Local.sDir.Declare(string)
+V.Local.bDir.Declare(boolean)
+V.Local.sFile.Declare(string)
+V.Local.iRet.Declare(long)
+
+	F.Intrinsic.String.Concat(V.Caller.TempDir,"\Update_Missing_Acct.txt",V.Local.sFile)
+	F.Intrinsic.File.String2File(V.Local.sFile,V.Args.MissAct)
+	F.Intrinsic.String.StripCharacters(V.Ambient.Date,V.Local.sDate)
+	F.Intrinsic.String.StripCharacters(V.Ambient.Time,V.Local.sTime)
+	F.Intrinsic.String.Concat(V.Local.sDate,V.Local.sTime,V.Local.sFileName)
+	F.Intrinsic.String.Concat(V.Caller.FilesDir,"\MissingAcct\",V.Local.sFileName,".txt",V.Local.sFileName)
+	F.Intrinsic.String.Concat(V.Caller.FilesDir,"\MissingAcct",V.Local.sDir)
+	F.Intrinsic.File.DirExists(V.Local.sDir,V.Local.bDir)
+	F.Intrinsic.Control.If(V.Local.bDir,=,False)
+		F.Intrinsic.File.CreateDir(V.Local.sDir)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.File.CopyFile(V.Local.sFile,V.Local.sFileName)
+
+	F.Intrinsic.File.GetHandle(V.Local.iRet)
+	f.Intrinsic.UI.Msgbox("Upload failed please see log files for Errors")
+	F.Intrinsic.Task.ShellExec(V.Caller.Handle,"OPEN",V.Local.sFile,"","",5)
+	F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+F.Intrinsic.Control.EndIf
+
+Function.Intrinsic.UI.ChangeWaitStatus("AP File Load") 
+f.Intrinsic.Control.CallSub(ap_load)
+
+Function.Intrinsic.UI.ChangeWaitStatus("GL File build") 
+f.Intrinsic.Control.CallSub(gl_format)
+
+'
+'F.Intrinsic.Debug.InvokeDebugger
+'
+'F.Intrinsic.Debug.Stop
+
+
+
+Function.Intrinsic.UI.ChangeWaitStatus("GL File Load") 
+
+f.Intrinsic.Control.CallSub(gl_load)
+
+'f.Intrinsic.Math.Add(V.local.iBatch,1,V.local.iBatch)
+''AP BATCH
+'Function.Global.General.SaveOption(400266, "0002", "", "", "", "", 0,"", V.local.iBatch)
+
+
+'f.Intrinsic.String.Split(V.Global.sBatch,"A",V.Global.sBatch)
+'f.Intrinsic.Math.Add(V.Global.sBatch(1).Long,1,V.local.iBatch)
+'
+'F.Intrinsic.String.Format(V.local.iBatch.long,"0000",V.Global.sBatch)
+'f.Intrinsic.String.Build("A{0}",V.Global.sBatch,V.Global.sBatch)
+'
+'f.Intrinsic.String.Build("update AP_VOUCH set VOUCH_NUM ='{0}' where Vouch_Key = 'C'",V.Global.sBatch,V.Local.sSQL)
+'F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+
+f.Intrinsic.String.Build("update GCG_4427_APUpload set Batch_ID ={0}",V.local.iBatch,V.Local.sSQL)
+F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+
+Function.Intrinsic.UI.CloseWaitDialog
+f.Intrinsic.UI.Msgbox("Upload completed successfully")
+F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdok_click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,=,20030)
+	f.Intrinsic.UI.Msgbox("Custom Batch Table not found, Failed to upload")
+	F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+F.Intrinsic.Control.elseIf(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.cmdok_click.End
+
+Program.Sub.cmdbrowser_click.Start
+F.Intrinsic.Control.SetErrorHandler("Load_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.bRet.Declare(Boolean)
+v.Local.bFileLocked.Declare(Boolean)
+
+'F.Intrinsic.Debug.Stop
+
+F.Intrinsic.UI.ShowOpenFileDialog("",".csv","",V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+	Gui.F_AP_UPLOAD.txtFile.text(V.Local.sFile)
+
+	f.Intrinsic.File.IsFileLocked(V.Local.sFile,v.Local.bFileLocked)
+	f.Intrinsic.Control.If(v.Local.bFileLocked,=,True)
+		f.Intrinsic.UI.Msgbox("Please close the file")
+		Gui.F_AP_UPLOAD.txtFile.text("")]
+		gui.F_AP_UPLOAD.cmdOK.Enabled(False)
+	f.Intrinsic.Control.Else
+		gui.F_AP_UPLOAD.cmdOK.Enabled(true)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Load_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_AP_Concur_Upload.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.cmdbrowser_click.End
+
+Program.Sub.f_ap_upload_unload.Start
+F.Intrinsic.Control.SetErrorHandler("f_ap_upload_unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+
+
+F.ODBC.Connection!conx.Close
+
+f.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("f_ap_upload_unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.f_ap_upload_unload.End
+
+Program.Sub.Vendor_Check.Start
+F.Intrinsic.Control.SetErrorHandler("Vendor_Check_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.local.sQuery.Declare(String)
+V.Local.sRet.Declare(String)
+
+F.Intrinsic.String.Concat("Select * From VENDOR_MASTER where VENDOR='",V.Args.Vendor.Trim,"'",V.Local.sQuery)
+F.ODBC.Connection!Conx.OpenRecordsetRO("rst",V.Local.sQuery)
+F.Intrinsic.Control.If(V.ODBC.Conx!rst.EOF,=,True)
+	V.Local.sRet.Set("False")
+F.Intrinsic.Control.Else
+	V.local.sRet.Set("True")
+F.Intrinsic.Control.EndIf
+F.ODBC.Conx!rst.Close
+
+F.Intrinsic.Variable.AddRV("Return",V.Local.sRet)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Vendor_Check_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_AP_Concur_Upload.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Vendor_Check.End
+
+Program.Sub.GL_Check.Start
+F.Intrinsic.Control.SetErrorHandler("GL_Check_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+V.local.sQuery.Declare(String)
+V.Local.sRet.Declare(String)
+
+F.Intrinsic.String.Concat("Select * From GL_MASTER where GL_ACCOUNT='",V.Args.GL.Trim,"'",V.Local.sQuery)
+F.ODBC.Connection!Conx.OpenRecordsetRO("rst",V.Local.sQuery)
+F.Intrinsic.Control.If(V.ODBC.Conx!rst.EOF,=,True)
+	V.Local.sRet.Set("False")
+F.Intrinsic.Control.Else
+	V.local.sRet.Set("True")
+F.Intrinsic.Control.EndIf
+F.ODBC.Conx!rst.Close
+
+F.Intrinsic.Variable.AddRV("Return",V.Local.sRet)
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("GL_Check_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_AP_Concur_Upload.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.GL_Check.End
+
+Program.Sub.AP_format.Start
+F.Intrinsic.Control.SetErrorHandler("AP_format_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+V.Local.sFile.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.iRet.Declare(Long)
+V.Local.bRet.Declare(Boolean)
+V.Local.iCount.Declare(Long)
+V.Local.sRet.Declare(String)
+V.Local.sTemp.Declare(String)
+V.Local.iUB.Declare(Long)
+V.Local.dRet.Declare(Date)
+V.Local.sMissingAcct.Declare(String)
+V.Local.fTotAmt.Declare(Float)
+
+
+V.uGlobal.uUpload.Redim(-1,-1)
+
+V.Local.sFile.Set(V.Screen.F_AP_UPLOAD!txtFile.Text)
+F.Intrinsic.File.Exists(V.local.sFile,V.Local.bRet)
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+	F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sText)
+'	F.Intrinsic.String.Replace(V.Local.sText,V.Ambient.DblQuote,"",V.local.sText)
+	F.Intrinsic.String.Split(V.Local.sText,V.Ambient.NewLine,V.Local.sText)
+
+
+'---------consolidate amt
+	F.Intrinsic.Control.For(V.Local.iCount,1,V.Local.sText.UBound,1)
+		Function.Intrinsic.UI.ChangeWaitStatus("Building AP Data", V.Local.iCount, 1, V.Local.sText.UBound)	
+		F.Intrinsic.Control.If(V.Local.sText(v.Local.iCount),<>,"")
+'			F.Intrinsic.String.Split(V.Local.sText(v.Local.iCount),",",V.Local.sRet)
+			f.Intrinsic.String.SplitCSV(V.Local.sText(v.Local.iCount),V.Local.sRet)
+			F.Intrinsic.Control.If(V.Local.sRet(22),<>,"")
+				F.Intrinsic.String.Replace(V.Local.sRet(22),"$","",V.Local.sTemp)
+				f.Intrinsic.Math.Add(V.Local.sTemp.Float,V.Local.fTotAmt,V.Local.fTotAmt)
+				F.Intrinsic.Debug.Stop
+				V.Local.sTemp.Set(V.Local.sRet(23))
+				'validate GL Account from Upload file
+				F.Intrinsic.String.RPad(V.Local.sTemp," ",15,V.Local.sTemp)
+				F.Intrinsic.Control.CallSub(Gl_check,"GL",V.Local.sTemp)
+				F.Intrinsic.Control.If(V.Args.Return,<>,"True")
+					F.Intrinsic.Control.If(V.Local.sMissingAcct,=,"")
+					V.Local.sMissingAcct.Set("The following GL Accounts could not be found:")
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.String.Concat(V.Local.sMissingAcct,V.Ambient.NewLine,"Row :",v.Local.iCount," ",v.Local.sTemp,V.Local.sMissingAcct)
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iCount)
+
+	F.Intrinsic.Control.If(V.Local.sText(0),<>,"")
+		F.Intrinsic.String.Split(V.Local.sText(1),",",V.Local.sRet)
+		'added in redim preserver to 30 so it brings in fields even if they aren't there.
+		v.Local.sRet.RedimPreserve(0,30)
+		F.Intrinsic.Control.If(V.Local.sRet(1),<>,"")
+
+			V.uGlobal.uUpload.Redim(0,0)
+			V.Local.iUB.Set(0)
+
+			'Vendor # and reserved 6 + 1
+			F.Intrinsic.String.RPad(v.Screen.F_AP_UPLOAD!txtvendor.text," ",7,V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!Vendor.Set(V.Local.sTemp)
+
+			'Invoice 15
+			v.Global.sInvoice.Set(V.Local.sRet(4))
+
+			F.Intrinsic.String.Right(v.Global.sInvoice,15,V.Local.sTemp)
+			F.Intrinsic.String.RPad(V.Local.sTemp," ",15,V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!Invoice.Set(V.Local.sTemp)
+
+			'Transaction Code- always 10 (invoice) 2
+			V.uGlobal.uUpload(v.Local.iUB)!TrnsCode.Set("10")
+
+			V.uGlobal.uUpload(v.Local.iUB)!BatchNum.Set(V.Global.sBatch)
+			'Batch Line 3
+			F.Intrinsic.Math.Add(V.Local.iUB,1,V.Local.iRet)
+			F.Intrinsic.String.LPad(V.Local.iRet,"0",3,V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!Line.Set(V.Local.sTemp)
+			'Batch Date MMDDYY 6
+			F.Intrinsic.String.Format(V.Screen.F_AP_UPLOAD!dtpBatch.Value,"MMDDYY",V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!BatchDate.Set(V.Local.sTemp)
+			'GL Acct 15
+
+			V.Local.sTemp.Set(v.global.sPayAcct)
+			'AP shud be payable account
+			F.Intrinsic.String.RPad(V.Local.sTemp," ",15,V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!GL.Set(V.Local.sTemp)
+
+			'Invoice Date and filler MMDDYY 6+5
+			F.Intrinsic.String.Format(V.local.sRet(10),"MMDDYY",V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!InvoiceDate.Set(V.Local.sTemp)
+			'Invoice Amt 16
+			F.Intrinsic.String.Format(V.Local.fTotAmt,"##############.00",V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!InvoiceAmt.Set(V.Local.sTemp)
+			'Invoice Due Date MMDDYY 6
+'				F.Intrinsic.Debug.Stop
+			V.Local.dRet.Set(V.local.sRet(0))
+			'F.Intrinsic.String.Format(V.Local.sRet(0),"YYYYMMDD",V.Local.dRet)
+			F.Intrinsic.Date.DateAdd("D",30,V.Local.dRet,V.Local.sTemp)
+			F.Intrinsic.String.Format(V.Local.sTemp,"MMDDYY",V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!InvoiceDDate.Set(V.Local.sTemp)
+			'Job/WO 6
+'				F.Intrinsic.String.RPad(V.Local.sRet(29)," ",6,V.Local.sTemp)
+			V.Local.sTemp.Set("")
+			F.Intrinsic.String.RPad(V.Local.sTemp," ",6,V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!WO.Set(V.Local.sTemp)
+			'Suffix 3
+			'F.Intrinsic.String.RPad(V.Local.sRet(30)," ",3,V.Local.sTemp)
+			V.uGlobal.uUpload(v.Local.iUB)!Sfx.Set("   ")
+			'Operation (sequence) 6
+			F.Intrinsic.Control.If(V.Local.sRet(29),<>,"")
+				F.Intrinsic.String.RPad("400"," ",6,V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!Operation.Set(V.Local.sTemp)
+			F.Intrinsic.Control.Else
+				F.Intrinsic.String.RPad(" "," ",6,V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!Operation.Set(V.Local.sTemp)
+			F.Intrinsic.Control.EndIf
+			'Currency Code 3	
+			V.uGlobal.uUpload(v.Local.iUB)!ExRate.Set(V.Local.sRet(5))
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.Debug.Stop
+
+
+
+'--------------------old upload
+'	F.Intrinsic.Control.For(V.Local.iCount,1,V.Local.sText.UBound,1)
+'		F.Intrinsic.Control.If(V.Local.sText(v.Local.iCount),<>,"")
+'			F.Intrinsic.String.Split(V.Local.sText(v.Local.iCount),",",V.Local.sRet)
+'			'added in redim preserver to 30 so it brings in fields even if they aren't there.
+'			v.Local.sRet.RedimPreserve(0,30)
+'			F.Intrinsic.Control.If(V.Local.sRet(1),<>,"")
+'				F.Intrinsic.Control.If(V.uGlobal.uUpload.UBound,=,-1)
+'					V.uGlobal.uUpload.Redim(0,0)
+'				F.Intrinsic.Control.Else
+'					V.Local.iUB.Set(V.uGlobal.uUpload.UBound)
+'					F.Intrinsic.Math.Add(V.Local.iUB,1,V.Local.iUB)
+'					V.uGlobal.uUpload.RedimPreserve(0,V.Local.iUB)
+'				F.Intrinsic.Control.EndIf
+'				'Vendor # and reserved 6 + 1
+'				F.Intrinsic.String.RPad(v.Screen.F_AP_UPLOAD!txtvendor.text," ",7,V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!Vendor.Set(V.Local.sTemp)
+'				
+'				'Invoice 15
+'				'assign Invoice from first line 
+'				f.Intrinsic.Control.If(V.Local.iCount,=,1)
+'					v.Global.sInvoice.Set(V.Local.sRet(4))
+'				f.Intrinsic.Control.Endif
+'				
+'				F.Intrinsic.String.Right(v.Global.sInvoice,15,V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!Invoice.Set(V.Local.sTemp)
+'				
+'				'Transaction Code- always 10 (invoice) 2
+'				V.uGlobal.uUpload(v.Local.iUB)!TrnsCode.Set("10")
+'				
+'				V.uGlobal.uUpload(v.Local.iUB)!BatchNum.Set(V.Global.sBatch)
+'				'Batch Line 3
+'				F.Intrinsic.Math.Add(V.Local.iUB,1,V.Local.iRet)
+'				F.Intrinsic.String.LPad(V.Local.iRet,"0",3,V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!Line.Set(V.Local.sTemp)
+'				'Batch Date MMDDYY 6
+'				F.Intrinsic.String.Format(V.Screen.F_AP_UPLOAD!dtpBatch.Value,"MMDDYY",V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!BatchDate.Set(V.Local.sTemp)
+'				'GL Acct 15
+'				
+''				V.Local.sTemp.Set("")
+'				V.Local.sTemp.Set(V.Local.sRet(23))
+'				'validate GL Account from Upload file
+'				F.Intrinsic.String.RPad(V.Local.sTemp," ",15,V.Local.sTemp)
+'				F.Intrinsic.Control.CallSub(Gl_check,"GL",V.Local.sTemp)
+'				F.Intrinsic.Control.If(V.Args.Return,=,"True")
+'					V.Local.sTemp.Set(v.global.sPayAcct)
+'					'AP shud be payable account
+'					F.Intrinsic.String.RPad(V.Local.sTemp," ",15,V.Local.sTemp)
+'					V.uGlobal.uUpload(v.Local.iUB)!GL.Set(V.Local.sTemp)
+'				F.Intrinsic.Control.Else
+'					F.Intrinsic.Control.If(V.Local.sMissingAcct,=,"")
+'					V.Local.sMissingAcct.Set("The following GL Accounts could not be found:")
+'					F.Intrinsic.Control.EndIf
+'					F.Intrinsic.String.Concat(V.Local.sMissingAcct,V.Ambient.NewLine,"Row :",v.Local.iCount," ",v.Local.sTemp,V.Local.sMissingAcct)
+'					f.Intrinsic.Control.GoTo("Load_Next")	
+'				F.Intrinsic.Control.EndIf
+'				'Invoice Date and filler MMDDYY 6+5
+'				F.Intrinsic.String.Format(V.local.sRet(10),"MMDDYY",V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!InvoiceDate.Set(V.Local.sTemp)
+'				'Invoice Amt 16
+'				F.Intrinsic.String.Replace(V.Local.sRet(22),"$","",V.Local.sTemp)
+'				F.Intrinsic.String.Format(V.Local.sTemp,"##############.00",V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!InvoiceAmt.Set(V.Local.sTemp)
+'				'Invoice Due Date MMDDYY 6
+''				F.Intrinsic.Debug.Stop
+'				V.Local.dRet.Set(V.local.sRet(0))
+'				'F.Intrinsic.String.Format(V.Local.sRet(0),"YYYYMMDD",V.Local.dRet)
+'				F.Intrinsic.Date.DateAdd("D",30,V.Local.dRet,V.Local.sTemp)
+'				F.Intrinsic.String.Format(V.Local.sTemp,"MMDDYY",V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!InvoiceDDate.Set(V.Local.sTemp)
+'				'Job/WO 6
+''				F.Intrinsic.String.RPad(V.Local.sRet(29)," ",6,V.Local.sTemp)
+'				V.Local.sTemp.Set("")
+'				F.Intrinsic.String.RPad(V.Local.sTemp," ",6,V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!WO.Set(V.Local.sTemp)
+'				'Suffix 3
+'				'F.Intrinsic.String.RPad(V.Local.sRet(30)," ",3,V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!Sfx.Set("   ")
+'				'Operation (sequence) 6
+'				F.Intrinsic.Control.If(V.Local.sRet(29),<>,"")
+'					F.Intrinsic.String.RPad("400"," ",6,V.Local.sTemp)
+'					V.uGlobal.uUpload(v.Local.iUB)!Operation.Set(V.Local.sTemp)
+'				F.Intrinsic.Control.Else
+'					F.Intrinsic.String.RPad(" "," ",6,V.Local.sTemp)
+'					V.uGlobal.uUpload(v.Local.iUB)!Operation.Set(V.Local.sTemp)
+'				F.Intrinsic.Control.EndIf
+'				'Currency Code 3	
+'				V.uGlobal.uUpload(v.Local.iUB)!ExRate.Set(V.Local.sRet(5))
+'			F.Intrinsic.Control.EndIf
+'		F.Intrinsic.Control.EndIf
+'F.Intrinsic.Control.Label("Load_Next")		
+'	F.Intrinsic.Control.Next(V.Local.iCount)
+'--------------------------------------------
+
+F.Intrinsic.Control.EndIf
+
+f.Intrinsic.Variable.AddRV("MissAct",V.Local.sMissingAcct)
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("AP_format_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.AP_format.End
+
+Program.Sub.AP_Load.Start
+F.Intrinsic.Control.SetErrorHandler("AP_Load_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.bRet.Declare(Boolean)
+V.Local.iCount.Declare(Long)
+V.Local.sTemp.Declare(String)
+
+F.Intrinsic.Control.For(V.Local.iCount,0,V.uGlobal.uUpload.UBound,1)
+	Function.Intrinsic.UI.ChangeWaitStatus("Loading Ap Data", V.Local.iCount, 0, V.uGlobal.uUpload.UBound)	
+	F.Intrinsic.Control.If(V.Local.iCount,<>,0)
+		F.Intrinsic.String.Concat(V.Local.sText,V.Ambient.NewLine,V.Local.sText)
+	F.Intrinsic.Control.EndIf
+	'Vendor # and reserved 6 + 1
+	F.Intrinsic.String.Concat(V.local.sText,V.uGlobal.uUpload(v.Local.iCount)!Vendor,V.Local.sText)
+	'Invoice 15
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!Invoice,V.local.sText)
+	'Transaction Code- always 10 (invoice) 2
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!TrnsCode,V.local.sText)
+
+	'Batch num
+	F.Intrinsic.String.Concat(V.local.sText,V.uGlobal.uUpload(v.Local.iCount)!BatchNum,V.Local.sText)
+
+	'Batch # 5, Batch Line 3
+	F.Intrinsic.String.LPad(V.uGlobal.uUpload(v.Local.iCount)!Line," ",3,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sText,V.Local.sTemp,V.Local.sText)
+	'Batch Date MMDDYY 6
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!BatchDate,V.local.sText)
+	'Territory/Branch & Area 2+2
+	F.Intrinsic.String.Concat(V.Local.sText,"    ",V.local.sText)
+	'GL Acct 15
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!GL,V.local.sText)
+	'Invoice Date and filler MMDDYY 6+5
+	F.Intrinsic.String.RPad(V.uGlobal.uUpload(v.Local.iCount)!InvoiceDate," ",11,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sText,V.Local.sTemp,V.Local.sText)
+	'Invoice Amt 16
+	F.Intrinsic.String.LPad(V.uGlobal.uUpload(v.Local.iCount)!InvoiceAmt," ",16,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sText,V.Local.sTemp,V.Local.sText)
+	'Invoice Due Date MMDDYY 6
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!InvoiceDDate,V.local.sText)
+	'Filler, Inv Discount, PO #, Buyer, Check #, Check Date, Check Code, Receiver #
+	F.Intrinsic.String.RPad(" "," ",50,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.Local.sText,V.Local.sTemp,V.Local.sText)
+	'Job/WO and suffix 6 + 3
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!WO,V.uGlobal.uUpload(v.Local.iCount)!Sfx,V.local.sText)
+	'Operation(sequence) 6
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!Operation,V.local.sText)
+	'Filler
+	F.Intrinsic.String.RPad(" "," ",115,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.Local.sText,V.Local.sTemp,V.Local.sText)
+	'Currency Code 3
+	F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!ExRate,V.local.sText)
+	'Filler
+	F.Intrinsic.String.RPad(" "," ",61,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.Local.sText,V.Local.sTemp,V.Local.sText)
+F.Intrinsic.Control.Next(V.Local.iCount)
+
+
+
+F.Intrinsic.String.Concat(V.caller.FilesDir,"\APOPNITM.TXT",V.Local.sFile)
+F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sText)
+'F.Global.General.CallWrapperSync(50,"UPLAPOP/A") ' supress append/delete confirmation.
+F.Global.General.CallWrapperSync(50,"UPLAPOP/A")
+
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("AP_Load_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.AP_Load.End
+
+Program.Sub.GL_format.Start
+F.Intrinsic.Control.SetErrorHandler("GL_format_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+V.Local.sFile.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.iRet.Declare(Long)
+V.Local.bRet.Declare(Boolean)
+V.Local.iCount.Declare(Long)
+V.Local.sRet.Declare(String)
+V.Local.sTemp.Declare(String)
+V.Local.iUB.Declare(Long)
+V.Local.dRet.Declare(Date)
+V.Local.sMissingAcct.Declare(String)
+V.Local.sQuery.Declare(String)
+
+
+Function.Intrinsic.UI.InvokeWaitDialog("Upload in progress please wait ...")
+
+
+V.uGlobal.uUpload.Redim(-1,-1)
+
+
+V.Local.sFile.Set(V.Screen.F_AP_UPLOAD!txtFile.Text)
+F.Intrinsic.File.Exists(V.local.sFile,V.Local.bRet)
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+	F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sText)
+'	F.Intrinsic.String.Replace(V.Local.sText,V.Ambient.DblQuote,"",V.local.sText)
+	F.Intrinsic.String.Split(V.Local.sText,V.Ambient.NewLine,V.Local.sText)
+	F.Intrinsic.Control.For(V.Local.iCount,1,V.Local.sText.UBound,1)
+		Function.Intrinsic.UI.ChangeWaitStatus("Building GL Data", V.Local.iCount, 1, V.Local.sText.UBound)
+
+		F.Intrinsic.Control.If(V.Local.sText(v.Local.iCount),<>,"")
+'			F.Intrinsic.String.Split(V.Local.sText(v.Local.iCount),",",V.Local.sRet)
+			f.Intrinsic.String.SplitCSV(V.Local.sText(v.Local.iCount),V.Local.sRet)
+			'added in redim preserver to 30 so it brings in fields even if they aren't there.
+			v.Local.sRet.RedimPreserve(0,30)
+			F.Intrinsic.Control.If(V.Local.sRet(1),<>,"")
+				F.Intrinsic.Control.If(V.uGlobal.uUpload.UBound,=,-1)
+					V.uGlobal.uUpload.Redim(0,0)
+				F.Intrinsic.Control.Else
+					V.Local.iUB.Set(V.uGlobal.uUpload.UBound)
+					F.Intrinsic.Math.Add(V.Local.iUB,1,V.Local.iUB)
+					V.uGlobal.uUpload.RedimPreserve(0,V.Local.iUB)
+				F.Intrinsic.Control.EndIf
+				'Vendor # and reserved 6 + 1
+				F.Intrinsic.String.RPad(v.Screen.F_AP_UPLOAD!txtvendor.text," ",7,V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!Vendor.Set(V.Local.sTemp)
+				'Invoice 15
+				'assign Invoice from first line
+
+				f.Intrinsic.Control.If(V.Local.iCount,=,1)
+					v.Global.sInvoice.Set(V.Local.sRet(4))
+				f.Intrinsic.Control.Endif
+
+				F.Intrinsic.String.Right(v.Global.sInvoice,15,V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!Invoice.Set(V.Local.sTemp)
+
+				'Batchnum
+				V.uGlobal.uUpload(v.Local.iUB)!BatchNum.Set(V.Global.sBatch)
+
+				V.uGlobal.uUpload(v.Local.iUB)!TrnsCode.Set("10")
+				'Batch Line 3
+				F.Intrinsic.Math.Add(V.Local.iUB,1,V.Local.iRet)
+				F.Intrinsic.String.LPad(V.Local.iRet,"0",5,V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!Line.Set(V.Local.sTemp)
+				'Batch Date MMDDYYYY 8
+				F.Intrinsic.String.Format(V.Screen.F_AP_UPLOAD!dtpBatch.Value,"YYYYMMDD",V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!BatchDate.Set(V.Local.sTemp)
+				'GL Acct 15
+				V.Local.sTemp.Set(V.Local.sRet(23))
+				F.Intrinsic.String.RPad(V.Local.sTemp," ",15,V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!GL.Set(V.Local.sTemp)
+
+				'Invoice Date and filler MMDDYYYY
+				F.Intrinsic.String.Format(V.local.sRet(10),"YYYYMMDD",V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!InvoiceDate.Set(V.Local.sTemp)
+				'Invoice Amt 16
+				F.Intrinsic.String.Replace(V.Local.sRet(22),"$","",V.Local.sTemp)
+				F.Intrinsic.String.Format(V.Local.sTemp,"##############.00",V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!InvoiceAmt.Set(V.Local.sTemp)
+
+				'Invoice Due Date MMDDYYYY 8
+				V.Local.dRet.Set(V.local.sRet(0))
+				F.Intrinsic.Date.DateAdd("D",30,V.Local.dRet,V.Local.sTemp)
+				F.Intrinsic.String.Format(V.Local.sTemp,"YYYYMMDD",V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!InvoiceDDate.Set(V.Local.sTemp)
+
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Label("Load_Next")		
+	F.Intrinsic.Control.Next(V.Local.iCount)
+F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("GL_format_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.GL_format.End
+
+Program.Sub.GL_load.Start
+F.Intrinsic.Control.SetErrorHandler("GL_load_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+V.Local.sFile.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.bRet.Declare(Boolean)
+V.Local.iCount.Declare(Long)
+V.Local.sTemp.Declare(String)
+V.Local.sTempText.Declare(String)
+V.Local.fTemp.Declare(String)
+
+
+F.Intrinsic.Control.For(V.Local.iCount,0,V.uGlobal.uUpload.UBound,1)
+'	F.Intrinsic.Control.If(V.Local.iCount,<>,0)
+'		F.Intrinsic.String.Concat(V.Local.sText,V.Ambient.NewLine,V.Local.sText)
+'	F.Intrinsic.Control.EndIf
+
+	Function.Intrinsic.UI.ChangeWaitStatus("Loading GL Data", V.Local.iCount, 0, V.uGlobal.uUpload.UBound)	
+	'========================
+	'Gl Account Number
+	F.Intrinsic.String.RPad(V.uGlobal.uUpload(v.Local.iCount)!GL," ",15,V.Local.sTemp)
+'	F.Intrinsic.String.Concat(V.local.sText,V.Local.sTemp,V.Local.sText)
+	V.Local.sTempText.Set(V.Local.sTemp)
+
+	'Batch Date MMDDYYYY
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.uGlobal.uUpload(v.Local.iCount)!BatchDate,V.local.sTempText)
+
+	'Transaction Batch Number
+	V.Local.sTemp.Set("")
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.uGlobal.uUpload(v.Local.iCount)!BatchNum,V.local.sTempText)
+
+	'Transaction Batch Line
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.uGlobal.uUpload(v.Local.iCount)!Line,V.local.sTempText)
+
+	'Filler for Transaction voucher number 7 spaces, and reference of 15 spaces. Total 22 Spaces
+
+	V.Local.sTemp.Set("")
+	F.Intrinsic.String.RPad(V.Local.sTemp," ",22,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	'Invoice Amt 
+	F.Intrinsic.String.LPad(V.uGlobal.uUpload(v.Local.iCount)!InvoiceAmt," ",16,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	V.Local.sTemp.Set("")
+	F.Intrinsic.String.RPad(V.Local.sTemp," ",30,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	'Application Type 
+	F.Intrinsic.String.Concat(V.local.sTempText,"AP",V.Local.sTempText)
+
+	'Trans code 
+	F.Intrinsic.String.Concat(V.local.sTempText,V.uGlobal.uUpload(v.Local.iCount)!TrnsCode,V.Local.sTempText)
+
+	V.Local.sTemp.Set("")
+	F.Intrinsic.String.RPad(V.Local.sTemp," ",7,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	'Vendor # 
+	F.Intrinsic.String.RPad(V.uGlobal.uUpload(v.Local.iCount)!Vendor," ",7,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	V.Local.sTemp.Set("")
+	F.Intrinsic.String.RPad(V.Local.sTemp," ",7,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	'Invoice #
+	F.Intrinsic.String.RPad(V.uGlobal.uUpload(v.Local.iCount)!Invoice," ",15,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	'Invoice Date
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.uGlobal.uUpload(v.Local.iCount)!InvoiceDate,V.local.sTempText)
+
+	'Invoice DueDate
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.uGlobal.uUpload(v.Local.iCount)!InvoiceDDate,V.local.sTempText)
+
+
+
+	'Filler
+	V.Local.sTemp.Set("")
+	F.Intrinsic.String.RPad(V.Local.sTemp," ",57,V.Local.sTemp)
+	F.Intrinsic.String.Concat(V.Local.sTempText,V.Local.sTemp,V.Local.sTempText)
+
+	v.Local.sNewText.Declare(string)
+	variable.local.posArray.declare(long)
+	variable.local.lenArray.declare(long)
+	variable.local.retArray.declare(string)
+
+
+	v.Local.sNewText.Set(V.Local.sTempText)
+
+	F.Intrinsic.String.Split("1*!*16*!*56*!*72","*!*",V.Local.PosArray)
+	F.Intrinsic.String.Split("15*!*40*!*16*!*143","*!*",V.Local.LenArray)
+	F.Intrinsic.String.PositionalSplit(V.Local.sNewText,V.Local.PosArray,V.Local.LenArray,V.Local.retArray)
+
+	F.Intrinsic.String.RPad(V.Global.sPayAcct.trim," ",15,v.Local.sTemp)
+
+
+'	'assign pay acct
+	V.Local.retArray(0).set(v.Local.sTemp)
+
+'	'assign -ve amt
+'	f.Intrinsic.String.Build("-{0}",v.Local.retArray(2).Trim,v.Local.sTemp)
+'	F.Intrinsic.String.LPad(V.Local.sTemp," ",16,V.Local.sTemp)
+'	V.Local.retArray(2).set(v.Local.sTemp)
+
+
+
+
+'--------------- new changes if -ve amount dont assign -ve sign
+	'assign -ve amt
+	f.Intrinsic.Control.If(v.Local.retArray(2).Float,<,0)
+'		F.Intrinsic.Debug.InvokeDebugger
+'		F.Intrinsic.Debug.Stop
+		f.Intrinsic.Math.Abs(v.Local.retArray(2).Float,V.Local.fTemp)
+		V.Local.sTemp.Set(V.Local.fTemp)
+
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("-{0}",v.Local.retArray(2).Trim,v.Local.sTemp)
+	f.Intrinsic.Control.EndIf 
+	F.Intrinsic.String.LPad(V.Local.sTemp," ",16,V.Local.sTemp)
+	V.Local.retArray(2).set(v.Local.sTemp)
+
+	f.Intrinsic.String.Build("{0}{1}{2}{3}",V.Local.retArray(0),V.Local.retArray(1),V.Local.retArray(2),V.Local.retArray(3),V.Local.sNewText)
+
+
+	F.Intrinsic.Control.If(V.Local.iCount,=,0)
+		V.Local.sText.Set(V.Local.sTempText)
+	f.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat(V.Local.sText,V.Ambient.NewLine,V.Local.sTempText,V.Local.sText)
+	F.Intrinsic.Control.EndIf
+
+	f.Intrinsic.String.Build("{0}{1}{2}",v.Local.sText,v.Ambient.NewLine,v.Local.sNewText,v.Local.sText)
+
+
+
+	'-----------------------CSV split method
+'	v.Local.sRet.Declare(string)
+'	v.Local.sNewText.Declare(string)
+'	
+'	v.Local.sNewText.Set(V.Local.sTempText)
+'	
+'	f.Intrinsic.String.Split(V.Local.sNewText,",",v.Local.sRet)
+''	v.Local.sTemp.Set(V.Local.sRet(1).Trim)
+'	F.Intrinsic.String.RPad(V.Global.sPayAcct.trim," ",15,v.Local.sTemp)
+'	'assign pay acct
+'	V.Local.sRet(10).set(v.Local.sTemp)
+'	
+'	'assign -ve amt
+'	f.Intrinsic.String.Build("-{0}",v.Local.sRet(14).Trim,v.Local.sTemp)
+'	F.Intrinsic.String.LPad(V.Local.sTemp," ",15,V.Local.sTemp)
+'	V.Local.sRet(14).set(v.Local.sTemp)
+'	
+'	f.Intrinsic.String.Join(V.Local.sNewText,",",v.Local.sRet)
+'	
+'	F.Intrinsic.Control.If(V.Local.iCount,=,0)
+'		V.Local.sText.Set(V.Local.sTempText)
+'	f.Intrinsic.Control.Else
+'		F.Intrinsic.String.Concat(V.Local.sText,V.Ambient.NewLine,V.Local.sTempText,V.Local.sText)
+'	F.Intrinsic.Control.EndIf
+'
+'	f.Intrinsic.String.Build("{0}{1}{2}",v.Local.sText,v.Ambient.NewLine,v.Local.sNewText,v.Local.sText)
+'	
+'----Normal method
+'v.Local.sNewText.Declare(string)
+'v.Local.sRet.Declare(string)
+'v.Local.sNew.Declare(string)
+'v.Local.lText.Declare(long)
+'
+'	v.Local.sNewText.Set(V.Local.sTempText)
+'	
+'	'Replace Acct with Payable acct
+'
+'	F.Intrinsic.String.RPad(V.Global.sPayAcct," ",15,V.Global.sPayAcct)
+'	
+'	f.Intrinsic.String.Len(V.Local.sTempText,v.Local.lText)
+'	f.Intrinsic.Math.Sub(v.Local.lText,15,v.Local.lText)
+'	
+'	f.Intrinsic.String.Right(v.Local.sTempText,v.Local.lText,v.Local.sRet)
+'	f.Intrinsic.String.Build("{0}{1}",v.Global.sPayAcct,v.Local.sRet,v.Local.sNewText)
+'	
+'	'get amt
+'	f.Intrinsic.String.Mid(V.Local.sTempText,56,15,v.Local.sRet)
+'	'add -ve
+'	f.Intrinsic.String.Build("-{0}",v.Local.sRet.Trim,v.Local.sNew)
+'	F.Intrinsic.String.LPad(V.Local.sNew," ",15,V.Local.sNew)
+'	f.Intrinsic.String.Replace(v.Local.sNewText,v.Local.sRet,v.Local.sNew,v.Local.sNewText)
+'	
+
+F.Intrinsic.Control.Next(V.Local.iCount)
+
+F.Intrinsic.String.Build("{0}\GLDETAIL.txt",V.Caller.FilesDir,V.Local.sFile)
+F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sText)
+F.Global.General.CallWrapperSync(50,"UPLGDETL")
+
+
+'F.Intrinsic.Debug.InvokeDebugger
+'
+'F.Intrinsic.Debug.Stop
+
+
+'v.local.scallwrapperreturn.Declare(string)
+
+'v.local.scallwrapperreturn.Set(v.ambient.callwrapperreturn)
+
+
+
+'f.Intrinsic.Math.Add(V.Global.iBatch,1,V.Global.iBatch)
+''GL BATCH
+''Function.Global.General.SaveOption(140002, "0001", "", "", "", "", V.Global.iBatch, "")
+''AP BATCH
+'Function.Global.General.SaveOption(400266, "0002", "", "", "", "", "","", V.Global.iBatch)
+
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("GL_load_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.GL_load.End
+
+Program.Sub.GetBankCode.Start
+F.Intrinsic.Control.SetErrorHandler("GetBankCode_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+
+
+V.Local.sFilname.Declare(String)
+V.Local.bFileExists.Declare
+V.Local.iFile.Declare
+V.Local.sText.Declare
+
+f.Intrinsic.String.Build("{0}Bcode.det",v.Caller.GasDir,v.Local.sFilname)
+F.Intrinsic.File.Exists(V.Local.sFilname,V.Local.bFileExists)
+F.Intrinsic.Control.If(V.Local.bFileExists,=,True)
+	F.Intrinsic.File.GetHandle(V.Local.iFile)
+	F.Intrinsic.File.OpenForRead(V.Local.sFilname,V.Local.iFile)
+	F.Intrinsic.File.ReadFile(V.Local.iFile,V.Local.sText)
+	f.Intrinsic.Variable.AddRV("Bcode",V.Local.sText)
+	F.Intrinsic.File.CloseFile(V.Local.iFile)
+	v.Global.bStatchg.Set(True)
+f.Intrinsic.Control.Else
+	f.Intrinsic.Variable.AddRV("Bcode","")
+	v.Global.bStatchg.Set(False)
+F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("GetBankCode_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4427_APUpload.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.GetBankCode.End
+
+Program.Sub.Comments.Start
+${$0$}$GCG_4427_APUpload.g2u$}$Ranjit$}$4/12/2017 8:45:05 PM$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$User will be able to select an file exported from Concur from a file browser and it will be uploaded into Global Shop Accounts Payable Open Item.
+Program.Sub.Comments.End
